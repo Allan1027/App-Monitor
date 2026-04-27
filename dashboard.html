@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>APPs 监控</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg:        #020810;
+  --bg2:       #050e1a;
+  --panel:     #070f1c;
+  --border:    #0a2040;
+  --cyan:      #00f5ff;
+  --cyan-dim:  #00a8b0;
+  --cyan-glow: rgba(0,245,255,.18);
+  --magenta:   #ff2d78;
+  --mag-dim:   #b01050;
+  --mag-glow:  rgba(255,45,120,.15);
+  --yellow:    #ffe033;
+  --green:     #00ff9d;
+  --green-dim: #00b870;
+  --red:       #ff3355;
+  --text:      #c8e8f8;
+  --text-dim:  #4a7090;
+  --text-mute: #1a3050;
+  --mono:      'Share Tech Mono', monospace;
+  --display:   'Orbitron', sans-serif;
+  --ui:        'Rajdhani', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  min-height: 100vh;
+  overflow-x: hidden;
+  cursor: crosshair;
+}
+
+/* scanlines */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9998;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.07) 2px, rgba(0,0,0,.07) 4px);
+  pointer-events: none;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background-image:
+    linear-gradient(rgba(0,245,255,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,245,255,.04) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: gridShift 20s linear infinite;
+  pointer-events: none;
+}
+@keyframes gridShift { 0%{background-position:0 0} 100%{background-position:50px 50px} }
+
+.corner-deco { position: fixed; z-index: 1; pointer-events: none; width: 80px; height: 80px; }
+.corner-deco.tl { top: 0; left: 0; border-top: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+.corner-deco.tr { top: 0; right: 0; border-top: 2px solid var(--magenta); border-right: 2px solid var(--magenta); }
+.corner-deco.bl { bottom: 0; left: 0; border-bottom: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+.corner-deco.br { bottom: 0; right: 0; border-bottom: 2px solid var(--magenta); border-right: 2px solid var(--magenta); }
+
+/* ── HEADER ── */
+header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(2,8,16,.92);
+  border-bottom: 1px solid var(--border);
+  padding: 0 36px; height: 70px;
+  display: flex; align-items: center; justify-content: space-between;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 0 40px rgba(0,245,255,.06);
+}
+header::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--magenta), transparent);
+  opacity: .5;
+}
+.logo { display: flex; align-items: center; gap: 16px; }
+.logo-hex { width: 42px; height: 42px; position: relative; display: grid; place-items: center; }
+.logo-hex::before {
+  content: '⬡'; font-size: 42px; color: transparent;
+  -webkit-text-stroke: 1.5px var(--cyan);
+  text-shadow: 0 0 20px var(--cyan);
+  animation: hexPulse 3s ease-in-out infinite;
+}
+.logo-hex-inner {
+  position: absolute; width: 14px; height: 14px; border-radius: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan), 0 0 30px rgba(0,245,255,.4);
+  animation: hexPulse 3s ease-in-out infinite;
+}
+@keyframes hexPulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+.logo-text { display: flex; flex-direction: column; }
+.logo-title {
+  font-family: var(--display); font-size: 18px; font-weight: 900; letter-spacing: 4px;
+  color: #fff; text-shadow: 0 0 20px rgba(0,245,255,.4);
+}
+.logo-title em { color: var(--cyan); font-style: normal; }
+/* ── CHANGED: sub text is now the bold SYS/PROCESS MONITOR label ── */
+.logo-sub {
+  font-size: 9px; letter-spacing: 3px; color: var(--text-dim);
+  margin-top: 2px;
+  font-weight: 700;           /* bold */
+  font-family: var(--display);
+}
+
+.header-center {
+  font-family: var(--display); font-size: 13px; letter-spacing: 3px;
+  color: var(--cyan-dim); text-shadow: 0 0 10px rgba(0,245,255,.3);
+}
+.header-right { display: flex; align-items: center; gap: 14px; }
+
+.sys-badge {
+  font-size: 10px; letter-spacing: 2px;
+  padding: 5px 12px; border-radius: 2px;
+  border: 1px solid; display: flex; align-items: center; gap: 7px;
+  clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  transition: all .3s;
+}
+.sys-badge.online  { color: var(--green); border-color: var(--green-dim); background: rgba(0,255,157,.07); box-shadow: 0 0 12px rgba(0,255,157,.1) inset; }
+.sys-badge.offline { color: #ff3355; border-color: #601020; background: rgba(255,51,85,.06); }
+.sys-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.sys-badge.online .dot { animation: blink 1.5s infinite; box-shadow: 0 0 6px currentColor; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+/* ── MAIN ── */
+main { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 32px 28px 100px; }
+
+.section-header {
+  display: flex; align-items: center; gap: 0; margin-bottom: 20px; flex-wrap: wrap; position: relative;
+}
+.section-label {
+  font-family: var(--display); font-size: 11px; letter-spacing: 3px;
+  color: var(--cyan); padding: 6px 16px 6px 12px;
+  background: rgba(0,245,255,.06); border: 1px solid rgba(0,245,255,.2);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+}
+.section-count {
+  font-family: var(--display); font-size: 11px; letter-spacing: 2px;
+  color: var(--magenta); padding: 6px 14px 6px 20px; margin-left: -2px;
+  background: rgba(255,45,120,.06); border: 1px solid rgba(255,45,120,.2);
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
+}
+.section-line { flex: 1; height: 1px; margin-left: 16px; background: linear-gradient(90deg, rgba(0,245,255,.3), transparent); }
+.toolbar-btns { display: flex; gap: 8px; margin-left: 16px; }
+
+/* ── DROP ZONE ── */
+.drop-zone {
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 22px 28px; text-align: center;
+  font-size: 12px; letter-spacing: 1px;
+  transition: all .25s; margin-bottom: 24px;
+  background: rgba(5,14,26,.7);
+  position: relative; overflow: hidden;
+}
+.drop-zone::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(0,245,255,.03), transparent 50%, rgba(255,45,120,.03));
+  pointer-events: none;
+}
+.drop-zone.drag-over {
+  border-color: var(--cyan); background: rgba(0,245,255,.05);
+  color: var(--cyan); box-shadow: 0 0 30px rgba(0,245,255,.1) inset, 0 0 30px rgba(0,245,255,.05);
+}
+.drop-zone-icon { font-size: 24px; margin-bottom: 6px; display: block; color: var(--cyan); opacity: .5; }
+
+/* ── CHANGED: lighter label colors in drop zone ── */
+.drop-zone p { margin-bottom: 8px; color: #3a6080; }  /* was text-dim #4a7090, now dimmer */
+.drop-zone p strong { color: var(--cyan); }
+.drop-zone small { font-size: 10px; color: #253848; } /* lighter / more muted */
+
+.drop-zone-or-inject {
+  font-size: 10px; letter-spacing: 2px;
+  color: #ffffff;   /* ── CHANGED: lighter colour ── */
+  margin-bottom: 10px; display: block;
+}
+
+.add-row { display: flex; gap: 8px; margin-top: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.add-row input {
+  background: rgba(0,245,255,.04); border: 1px solid rgba(0,245,255,.2);
+  border-radius: 2px; color: var(--text); font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+  padding: 8px 14px; width: 360px; outline: none; transition: all .2s;
+}
+.add-row input:focus { border-color: var(--cyan); background: rgba(0,245,255,.07); box-shadow: 0 0 16px rgba(0,245,255,.08); }
+/* ── CHANGED: placeholder colour lighter/dimmer ── */
+.add-row input::placeholder { color: #1e3348; }
+
+/* ── BUTTONS ── */
+.btn {
+  font-family: var(--display); font-weight: 600; font-size: 12px; letter-spacing: 2px;
+  border: none; cursor: pointer; padding: 8px 18px;
+  transition: all .18s; display: inline-flex; align-items: center; gap: 6px;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+  position: relative;
+}
+.btn-cyan { background: var(--cyan); color: #000; box-shadow: 0 0 16px rgba(0,245,255,.3), 0 0 40px rgba(0,245,255,.1); }
+.btn-cyan:hover { background: #30ffff; box-shadow: 0 0 24px rgba(0,245,255,.5), 0 0 60px rgba(0,245,255,.2); }
+.btn-outline { background: transparent; color: var(--cyan); border: 1px solid rgba(0,245,255,.3); clip-path: none; border-radius: 2px; }
+.btn-outline:hover { background: rgba(0,245,255,.08); border-color: var(--cyan); box-shadow: 0 0 12px rgba(0,245,255,.15); }
+.btn-outline-mag { background: transparent; color: var(--magenta); border: 1px solid rgba(255,45,120,.3); clip-path: none; border-radius: 2px; }
+.btn-outline-mag:hover { background: rgba(255,45,120,.08); border-color: var(--magenta); }
+.btn-sm { padding: 5px 12px; font-size: 11px; }
+
+.btn-on {
+  font-family: var(--display); font-size: 13px; font-weight: 700; letter-spacing: 2px;
+  background: transparent; color: var(--green); border: 1px solid var(--green-dim);
+  padding: 7px 16px; cursor: pointer; transition: all .18s;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+}
+.btn-on:hover:not(:disabled) { background: rgba(0,255,157,.12); box-shadow: 0 0 16px rgba(0,255,157,.3), 0 0 40px rgba(0,255,157,.1); color: #fff; border-color: var(--green); }
+.btn-on:disabled { opacity: .25; cursor: default; }
+
+.btn-off {
+  font-family: var(--display); font-size: 13px; font-weight: 700; letter-spacing: 2px;
+  background: transparent; color: var(--red); border: 1px solid rgba(255,51,85,.4);
+  padding: 7px 16px; cursor: pointer; transition: all .18s;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+}
+.btn-off:hover:not(:disabled) { background: rgba(255,51,85,.12); box-shadow: 0 0 16px rgba(255,51,85,.3); color: #fff; border-color: var(--red); }
+.btn-off:disabled { opacity: .25; cursor: default; }
+
+/* ── APP CARDS ── */
+.apps-list { display: flex; flex-direction: column; gap: 10px; }
+
+.app-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+  padding: 14px 20px; display: flex; align-items: center; gap: 18px;
+  transition: all .35s cubic-bezier(.4,0,.2,1);
+  position: relative; overflow: hidden; min-height: 64px;
+}
+.app-card::before {
+  content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px;
+  background: var(--text-mute); transition: all .35s;
+}
+.app-card::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(0,245,255,.02), transparent 60%);
+  pointer-events: none; transition: opacity .35s; opacity: 0;
+}
+.app-card.running {
+  border-color: rgba(0,245,255,.35);
+  background: linear-gradient(135deg, rgba(0,245,255,.05) 0%, rgba(5,14,26,1) 60%);
+  box-shadow: 0 0 0 1px rgba(0,245,255,.1), 0 0 30px rgba(0,245,255,.08), 0 8px 32px rgba(0,0,0,.4);
+  min-height: 80px; padding: 18px 24px;
+}
+.app-card.running::before { background: linear-gradient(180deg, var(--cyan), var(--green)); box-shadow: 0 0 12px var(--cyan), 0 0 24px rgba(0,245,255,.4); width: 3px; }
+.app-card.running::after { opacity: 1; }
+
+.app-card.error {
+  border-color: rgba(255,51,85,.35);
+  background: linear-gradient(135deg, rgba(255,51,85,.05) 0%, rgba(5,14,26,1) 60%);
+  box-shadow: 0 0 0 1px rgba(255,51,85,.1), 0 0 30px rgba(255,51,85,.08), 0 8px 32px rgba(0,0,0,.4);
+  min-height: 80px; padding: 18px 24px;
+}
+.app-card.error::before { background: linear-gradient(180deg, var(--red), #ff8800); box-shadow: 0 0 12px var(--red), 0 0 24px rgba(255,51,85,.4); width: 3px; }
+.app-card.error::after { background: linear-gradient(135deg, rgba(255,51,85,.04), transparent 60%); opacity: 1; }
+
+/* ── CHANGED: success = green circle "ONLINE" (not tick "DONE") ── */
+.app-card.success {
+  border-color: rgba(0,255,157,.35);
+  background: linear-gradient(135deg, rgba(0,255,157,.05) 0%, rgba(5,14,26,1) 60%);
+  box-shadow: 0 0 0 1px rgba(0,255,157,.1), 0 0 30px rgba(0,255,157,.08), 0 8px 32px rgba(0,0,0,.4);
+  min-height: 80px; padding: 18px 24px;
+}
+.app-card.success::before { background: linear-gradient(180deg, var(--green), #00aaff); box-shadow: 0 0 12px var(--green), 0 0 24px rgba(0,255,157,.4); width: 3px; }
+.app-card.success::after { background: linear-gradient(135deg, rgba(0,255,157,.04), transparent 60%); opacity: 1; }
+
+.app-card:not(.running):hover { border-color: rgba(0,245,255,.15); box-shadow: 0 4px 20px rgba(0,0,0,.3); }
+
+/* status dot */
+.status-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: var(--text-mute); border: 1px solid var(--border); transition: all .35s;
+}
+.app-card.running .status-dot {
+  background: var(--cyan); border-color: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan), 0 0 20px rgba(0,245,255,.5);
+  animation: dotPulse 2s ease-in-out infinite; width: 13px; height: 13px;
+}
+.app-card.error .status-dot {
+  background: var(--red); border-color: var(--red);
+  box-shadow: 0 0 8px var(--red), 0 0 20px rgba(255,51,85,.5);
+  animation: dotPulseRed 2s ease-in-out infinite; width: 13px; height: 13px;
+}
+/* ── CHANGED: success dot = solid green circle (no animation, matches "ONLINE" feel) ── */
+.app-card.success .status-dot {
+  background: var(--green); border-color: var(--green);
+  box-shadow: 0 0 8px var(--green), 0 0 20px rgba(0,255,157,.5);
+  animation: dotPulseGreen 2s ease-in-out infinite; width: 13px; height: 13px;
+}
+@keyframes dotPulse { 0%,100%{box-shadow:0 0 8px var(--cyan),0 0 20px rgba(0,245,255,.5)} 50%{box-shadow:0 0 16px var(--cyan),0 0 40px rgba(0,245,255,.7)} }
+@keyframes dotPulseRed { 0%,100%{box-shadow:0 0 8px var(--red),0 0 20px rgba(255,51,85,.5)} 50%{box-shadow:0 0 16px var(--red),0 0 40px rgba(255,51,85,.7)} }
+@keyframes dotPulseGreen { 0%,100%{box-shadow:0 0 8px var(--green),0 0 20px rgba(0,255,157,.5)} 50%{box-shadow:0 0 16px var(--green),0 0 40px rgba(0,255,157,.7)} }
+
+/* app name */
+.app-name {
+  font-family: var(--display); font-weight: 700; letter-spacing: 2px;
+  cursor: pointer; min-width: 100px; transition: all .35s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 16px; color: #c8dff0;
+}
+.app-card.running .app-name { font-size: 20px; color: var(--cyan); text-shadow: 0 0 16px rgba(0,245,255,.5); letter-spacing: 3px; }
+.app-card.error   .app-name { font-size: 20px; color: var(--red);  text-shadow: 0 0 16px rgba(255,51,85,.5);  letter-spacing: 3px; }
+.app-card.success .app-name { font-size: 20px; color: var(--green);text-shadow: 0 0 16px rgba(0,255,157,.5);  letter-spacing: 3px; }
+.app-name:hover { color: var(--cyan) !important; text-shadow: 0 0 12px rgba(0,245,255,.6) !important; }
+
+/* path */
+.app-path { font-size: 12px; color: #6a90a8; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .5px; transition: all .35s; }
+.app-card.running .app-path { color: var(--text-dim); font-size: 13px; }
+.app-card.error   .app-path { color: rgba(255,100,120,.6); font-size: 13px; }
+.app-card.success .app-path { color: rgba(0,200,120,.6); font-size: 13px; }
+
+/* status badge */
+.status-badge {
+  font-family: var(--display); font-size: 11px; letter-spacing: 2px;
+  padding: 4px 10px;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+  min-width: 80px; text-align: center; flex-shrink: 0; transition: all .35s;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+}
+.app-card.running .status-badge {
+  background: rgba(0,245,255,.12); color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0,245,255,.2); font-size: 12px; padding: 5px 14px;
+}
+.app-card.error .status-badge {
+  background: rgba(255,51,85,.12); color: var(--red);
+  box-shadow: 0 0 12px rgba(255,51,85,.2); font-size: 12px; padding: 5px 14px;
+}
+/* ── CHANGED: success badge = green circle + ONLINE ── */
+.app-card.success .status-badge {
+  background: rgba(0,255,157,.12); color: var(--green);
+  box-shadow: 0 0 12px rgba(0,255,157,.2); font-size: 12px; padding: 5px 14px;
+}
+.app-card:not(.running):not(.error):not(.success) .status-badge {
+  background: rgba(255,255,255,.03); color: #8ab0c8;
+}
+
+/* green circle dot inside badge for success */
+.badge-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  animation: dotPulseGreen 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* controls */
+.app-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.icon-btn {
+  width: 32px; height: 32px; border-radius: 2px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); cursor: pointer;
+  display: grid; place-items: center; font-size: 14px;
+  transition: all .18s; flex-shrink: 0;
+  clip-path: polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%);
+}
+.icon-btn:hover { border-color: var(--cyan); color: var(--cyan); background: rgba(0,245,255,.08); box-shadow: 0 0 12px rgba(0,245,255,.15); }
+.icon-btn.danger:hover { border-color: var(--red); color: var(--red); background: rgba(255,51,85,.08); }
+.icon-btn.watchdog-btn.active { border-color: var(--yellow); color: var(--yellow); background: rgba(255,224,51,.08); }
+.icon-btn.watchdog-btn.active:hover { border-color: var(--yellow); color: var(--yellow); background: rgba(255,224,51,.18); box-shadow: 0 0 12px rgba(255,224,51,.25); }
+.icon-btn.watchdog-btn.counting { width: auto; min-width: 44px; padding: 0 6px; font-size: 10px; letter-spacing: 1px; border-color: var(--magenta); color: var(--magenta); background: rgba(255,45,120,.1); animation: wdPulse 1s ease-in-out infinite; clip-path: none; border-radius: 2px; }
+.app-card.running .icon-btn.watchdog-btn.counting,
+.app-card.error   .icon-btn.watchdog-btn.counting,
+.app-card.success .icon-btn.watchdog-btn.counting { min-width: 48px; }
+@keyframes wdPulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+
+.running-meta {
+  display: none; position: absolute; bottom: 6px; left: 28px;
+  font-size: 11px; letter-spacing: 2px;
+}
+.app-card.running .running-meta { display: block; color: rgba(0,245,255,.4); }
+.app-card.error   .running-meta { display: block; color: rgba(255,51,85,.5); }
+.app-card.success .running-meta { display: block; color: rgba(0,255,157,.4); }
+
+.app-card.running .icon-btn,
+.app-card.error   .icon-btn,
+.app-card.success .icon-btn { width: 36px; height: 36px; font-size: 16px; }
+.app-card.running .btn-on, .app-card.running .btn-off,
+.app-card.error   .btn-on, .app-card.error   .btn-off,
+.app-card.success .btn-on, .app-card.success .btn-off { padding: 9px 20px; font-size: 13px; }
+
+/* external detected banner */
+.external-badge {
+  font-size: 9px; letter-spacing: 2px; color: var(--yellow);
+  border: 1px solid rgba(255,224,51,.25); background: rgba(255,224,51,.05);
+  padding: 2px 8px; border-radius: 2px; white-space: nowrap; flex-shrink: 0;
+}
+
+/* ── empty ── */
+.empty-state { text-align: center; padding: 80px 20px; display: none; flex-direction: column; align-items: center; gap: 12px; }
+.empty-state.show { display: flex; }
+.empty-hex { font-size: 56px; color: transparent; -webkit-text-stroke: 1px var(--border); }
+.empty-text { font-family: var(--display); font-size: 11px; letter-spacing: 3px; color: var(--text-mute); }
+
+/* ── LOG DRAWER ── */
+.log-overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(2,8,16,.7); backdrop-filter: blur(6px);
+  align-items: flex-end; justify-content: center;
+}
+.log-overlay.show { display: flex; }
+.log-drawer {
+  background: #030c18; border: 1px solid rgba(0,245,255,.25); border-bottom: none;
+  border-radius: 12px 12px 0 0; width: 100%; max-width: 960px; height: 68vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 -16px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(0,245,255,.08);
+  animation: drawerUp .28s cubic-bezier(.4,0,.2,1); position: relative; overflow: hidden;
+}
+.log-drawer::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--magenta), transparent);
+}
+@keyframes drawerUp { from{transform:translateY(50px);opacity:0} to{transform:none;opacity:1} }
+.log-header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 22px; flex-shrink: 0;
+  border-bottom: 1px solid rgba(0,245,255,.1);
+  background: rgba(0,245,255,.03);
+}
+.log-title { font-family: var(--display); font-size: 12px; letter-spacing: 3px; color: var(--cyan); flex: 1; }
+.log-title span { color: var(--magenta); }
+.log-run-status { font-size: 10px; letter-spacing: 2px; padding: 3px 10px; border-radius: 2px; }
+.log-run-status.running { color: var(--green); border: 1px solid rgba(0,255,157,.3); background: rgba(0,255,157,.07); }
+.log-run-status.stopped { color: var(--red); border: 1px solid rgba(255,51,85,.3); background: rgba(255,51,85,.07); }
+.log-body {
+  flex: 1; overflow-y: auto; padding: 16px 22px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.8;
+  color: rgba(150,210,240,.8);
+  background: repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(0,245,255,.015) 28px, rgba(0,245,255,.015) 29px);
+}
+.log-body::-webkit-scrollbar { width: 4px; }
+.log-body::-webkit-scrollbar-track { background: transparent; }
+.log-body::-webkit-scrollbar-thumb { background: rgba(0,245,255,.2); border-radius: 2px; }
+.log-line { white-space: pre-wrap; word-break: break-all; }
+.log-line::before { content: '›'; color: rgba(0,245,255,.25); margin-right: 10px; }
+.log-line.err { color: var(--red); }
+.log-line.err::before { color: var(--red); content: '!'; }
+.log-empty { color: var(--text-mute); text-align: center; margin-top: 50px; font-size: 11px; letter-spacing: 2px; }
+.log-footer {
+  padding: 10px 22px; border-top: 1px solid rgba(0,245,255,.1);
+  display: flex; align-items: center; gap: 14px; flex-shrink: 0; background: rgba(0,245,255,.02);
+}
+.log-footer label { font-size: 10px; letter-spacing: 1px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.log-footer input[type=checkbox] { accent-color: var(--cyan); }
+.log-line-count { font-size: 10px; letter-spacing: 1px; color: var(--text-mute); margin-left: auto; }
+
+/* ── TOAST ── */
+#toast-container { position: fixed; bottom: 28px; right: 28px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  font-family: var(--display); font-size: 10px; letter-spacing: 2px;
+  padding: 10px 18px; border: 1px solid;
+  animation: toastIn .2s ease;
+  clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+}
+.toast.success { background: rgba(0,255,157,.08); border-color: rgba(0,255,157,.3); color: var(--green); }
+.toast.error   { background: rgba(255,51,85,.08);  border-color: rgba(255,51,85,.3);  color: var(--red); }
+.toast.info    { background: rgba(0,245,255,.07);  border-color: rgba(0,245,255,.25); color: var(--cyan); }
+@keyframes toastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:none} }
+
+/* ── MODAL ── */
+.modal-overlay { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(2,8,16,.75); backdrop-filter: blur(8px); place-items: center; }
+.modal-overlay.show { display: grid; }
+.modal {
+  background: var(--panel); border: 1px solid rgba(0,245,255,.3); border-radius: 4px;
+  padding: 30px; width: 400px; max-width: 95vw;
+  box-shadow: 0 0 60px rgba(0,245,255,.1), 0 30px 60px rgba(0,0,0,.6); position: relative;
+}
+.modal::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); }
+.modal h3 { font-family: var(--display); font-size: 13px; letter-spacing: 3px; margin-bottom: 20px; color: var(--cyan); }
+.modal input {
+  width: 100%; background: rgba(0,245,255,.04); border: 1px solid rgba(0,245,255,.2);
+  border-radius: 2px; color: var(--text); font-family: var(--mono); font-size: 12px;
+  padding: 10px 14px; outline: none; margin-bottom: 20px; transition: all .2s; letter-spacing: 1px;
+}
+.modal input:focus { border-color: var(--cyan); background: rgba(0,245,255,.08); box-shadow: 0 0 16px rgba(0,245,255,.1); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: rgba(0,245,255,.15); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="corner-deco tl"></div>
+<div class="corner-deco tr"></div>
+<div class="corner-deco bl"></div>
+<div class="corner-deco br"></div>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="logo">
+    <div class="logo-hex"><div class="logo-hex-inner"></div></div>
+    <div class="logo-text">
+      <div class="logo-title">APPs&nbsp;<em>监控</em></div>
+      <!-- CHANGED: bold SYS/PROCESS MONITOR -->
+      <div class="logo-sub">SYS / PROCESS MONITOR · v2.0</div>
+    </div>
+  </div>
+  <div class="header-center" id="live-clock">--:--:--</div>
+  <div class="header-right">
+    <div class="sys-badge offline" id="server-badge">
+      <div class="dot"></div>
+      <span id="server-status-text">SYS::OFFLINE</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── MAIN ── -->
+<main>
+  <div class="section-header">
+    <div class="section-label">PROCESS LIST</div>
+    <div class="section-count" id="app-count-badge">00 NODES</div>
+    <div class="section-line"></div>
+    <div class="toolbar-btns">
+      <button class="btn btn-outline btn-sm" onclick="startAllApps()">▶ ALL START</button>
+      <button class="btn btn-outline-mag btn-sm" onclick="stopAllApps()">■ ALL STOP</button>
+    </div>
+  </div>
+
+  <div class="drop-zone" id="drop-zone">
+    <span class="drop-zone-icon">⊕</span>
+    <p>DROP <strong>.py</strong> · <strong>.bat</strong> · <strong>.exe</strong> · <strong>.vbs</strong> · <strong>.ps1</strong> · <strong>.cmd</strong> · <strong>.sh</strong> · <strong>.js</strong> · <strong>.ahk</strong> · <strong>.jar</strong> · <strong>.rb</strong> · <strong>.lua</strong></p>
+    <!-- CHANGED: lighter label text + separate span for "TO REGISTER NODE" -->
+    <strong>TO REGISTER NODE</strong>
+    <!-- CHANGED: lighter "OR INJECT PATH MANUALLY BELOW" -->
+    <span class="drop-zone-or-inject">OR INJECT PATH MANUALLY BELOW</span>
+    <div class="add-row">
+      <!-- CHANGED: placeholder colour made lighter via CSS -->
+      <input type="text" id="manual-path" placeholder="C:\scripts\ping.py" />
+      <button class="btn btn-cyan btn-sm" onclick="addManual()">INJECT</button>
+    </div>
+  </div>
+
+  <div class="apps-list" id="apps-list"></div>
+
+  <div class="empty-state" id="empty-state">
+    <div class="empty-hex">⬡</div>
+    <div class="empty-text">NO NODES REGISTERED</div>
+    <div style="font-size:10px;color:var(--text-mute);letter-spacing:2px">DROP A SCRIPT OR INJECT PATH TO BEGIN</div>
+  </div>
+</main>
+
+<!-- ── LOG DRAWER ── -->
+<div class="log-overlay" id="log-overlay">
+  <div class="log-drawer">
+    <div class="log-header">
+      <div class="log-title">PROCESS·OUTPUT :: <span id="log-title-name">—</span></div>
+      <div class="log-run-status" id="log-status"></div>
+      <button class="btn btn-outline btn-sm" onclick="closeLog()">✕ CLOSE</button>
+    </div>
+    <div class="log-body" id="log-body">
+      <div class="log-empty">AWAITING OUTPUT STREAM...</div>
+    </div>
+    <div class="log-footer">
+      <label><input type="checkbox" id="auto-scroll" checked /> AUTO-SCROLL</label>
+      <button class="btn btn-outline btn-sm" onclick="clearLogView()">CLEAR</button>
+      <div class="log-line-count" id="log-line-count">0 LINES</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RENAME MODAL ── -->
+<div class="modal-overlay" id="rename-modal">
+  <div class="modal">
+    <h3>// RENAME NODE</h3>
+    <input type="text" id="rename-input" placeholder="display_name" />
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">CANCEL</button>
+      <button class="btn btn-cyan btn-sm" onclick="confirmRename()">CONFIRM</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const API = "http://localhost:5000";
+let appsCache = [];
+let backendOnline = false;
+let renameTarget = null;
+let logAppId = null;
+let logPollTimer = null;
+let logLineCount = 0;
+const watchdogEnabled = {};   // appId -> bool
+const watchdogTimers  = {};   // appId -> setInterval handle
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById("live-clock").textContent = `${h}:${m}:${s}`;
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function toast(msg, type = "info") {
+  const t = document.createElement("div");
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.getElementById("toast-container").appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+async function api(path, method = "GET", body = null) {
+  const opts = { method, headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  return res.json();
+}
+
+// ── Backend ───────────────────────────────────────────────────────────────────
+async function checkBackend() {
+  try {
+    await fetch(API + "/ping", { signal: AbortSignal.timeout(2000) });
+    if (!backendOnline) {
+      backendOnline = true;
+      document.getElementById("server-badge").className = "sys-badge online";
+      document.getElementById("server-status-text").textContent = "SYS::ONLINE";
+      toast("SYSTEM CONNECTED", "success");
+      loadApps();
+    }
+  } catch {
+    if (backendOnline) {
+      backendOnline = false;
+      document.getElementById("server-badge").className = "sys-badge offline";
+      document.getElementById("server-status-text").textContent = "SYS::OFFLINE";
+      toast("SYSTEM DISCONNECTED", "error");
+    }
+  }
+}
+
+// ── Load & Render ─────────────────────────────────────────────────────────────
+async function loadApps() {
+  if (!backendOnline) return;
+  try {
+    const apps = await api("/apps");
+    appsCache = apps;
+    renderApps(apps);
+  } catch {}
+}
+
+function renderApps(apps) {
+  const list = document.getElementById("apps-list");
+  const empty = document.getElementById("empty-state");
+  const count = String(apps.length).padStart(2, '0');
+  document.getElementById("app-count-badge").textContent = `${count} NODES`;
+
+  if (apps.length === 0) { list.innerHTML = ""; empty.classList.add("show"); return; }
+  empty.classList.remove("show");
+
+  const newIds = new Set(apps.map(a => String(a.id)));
+  [...list.querySelectorAll(".app-card")].forEach(c => { if (!newIds.has(c.dataset.id)) c.remove(); });
+
+  apps.forEach(app => {
+    let card = list.querySelector(`[data-id="${app.id}"]`);
+    if (!card) { card = createCard(app); list.appendChild(card); }
+    updateCard(card, app);
+  });
+}
+
+function createCard(app) {
+  const card = document.createElement("div");
+  card.className = "app-card";
+  card.dataset.id = app.id;
+  card.innerHTML = `
+    <div class="status-dot"></div>
+    <div class="app-name" title="View live output"></div>
+    <div class="app-path"></div>
+    <div class="status-badge"></div>
+    <div class="app-controls">
+      <button class="btn-on">ON</button>
+      <button class="btn-off">OFF</button>
+      <button class="icon-btn restart-btn" title="Restart">↺</button>
+      <button class="icon-btn rename-btn" title="Rename">✎</button>
+      <button class="icon-btn watchdog-btn" title="Enable Watchdog — auto-restart on error">⚡</button>
+      <button class="icon-btn danger remove-btn" title="Remove">✕</button>
+    </div>
+    <div class="running-meta"></div>
+  `;
+  card.querySelector(".app-name").addEventListener("click", () => openLog(app.id));
+  card.querySelector(".btn-on").addEventListener("click", () => startApp(app.id));
+  card.querySelector(".btn-off").addEventListener("click", () => stopApp(app.id));
+  card.querySelector(".restart-btn").addEventListener("click", () => restartApp(app.id));
+  card.querySelector(".rename-btn").addEventListener("click", () => openRename(app.id, card.querySelector(".app-name").textContent));
+  card.querySelector(".watchdog-btn").addEventListener("click", () => toggleWatchdog(app.id));
+  card.querySelector(".remove-btn").addEventListener("click", () => removeApp(app.id));
+  return card;
+}
+
+function updateCard(card, app) {
+  const state = app.state || (app.running ? "running" : "offline");
+  const isRunning = app.running;
+
+  card.classList.remove("running", "error", "success");
+  if (state === "running") card.classList.add("running");
+  else if (state === "error") card.classList.add("error");
+  else if (state === "success") card.classList.add("success");
+
+  card.querySelector(".app-name").textContent = app.name;
+  card.querySelector(".app-path").textContent = app.path;
+
+  // ── CHANGED: success badge = green circle dot + "ONLINE" text ──
+  const badge = card.querySelector(".status-badge");
+  if (state === "running") {
+    badge.innerHTML = "● RUNNING";
+  } else if (state === "error") {
+    badge.innerHTML = "✖ ERROR";
+  } else if (state === "success") {
+    badge.innerHTML = `<span class="badge-dot"></span> ON`;
+  } else {
+    badge.innerHTML = "○ OFF";
+  }
+
+  let metaText = "▸ PROCESS INACTIVE";
+  if (state === "running") metaText = "▸ PROCESS ACTIVE · CLICK NAME TO VIEW OUTPUT";
+  else if (state === "error")   metaText = "▸ PROCESS EXITED WITH ERROR · CLICK NAME TO VIEW OUTPUT";
+  else if (state === "success") metaText = "▸ COMPLETED · NOW ONLINE · CLICK NAME TO VIEW OUTPUT";
+
+  const meta = card.querySelector(".running-meta");
+  if (meta) meta.textContent = metaText;
+
+  card.querySelector(".btn-on").disabled  = isRunning;
+  card.querySelector(".btn-off").disabled = !isRunning;
+}
+
+// ── Watchdog (Auto-Restart on Error) ─────────────────────────────────────────
+function toggleWatchdog(id) {
+  const strId = String(id);
+  const card = document.querySelector(`[data-id="${id}"]`);
+  if (!card) return;
+  if (watchdogEnabled[strId]) {
+    watchdogEnabled[strId] = false;
+    clearWatchdogTimer(strId);
+    updateWatchdogBtn(card, strId);
+    toast("WATCHDOG DISABLED", "info");
+  } else {
+    watchdogEnabled[strId] = true;
+    updateWatchdogBtn(card, strId);
+    toast("WATCHDOG ARMED · WATCHING FOR ERRORS", "success");
+    if (card.dataset.state === "error") startWatchdogCountdown(id);
+  }
+}
+
+function startWatchdogCountdown(id) {
+  const strId = String(id);
+  clearWatchdogTimer(strId);
+  let remaining = 300;
+  const card = document.querySelector(`[data-id="${id}"]`);
+  if (card) updateWatchdogBtn(card, strId, remaining);
+
+  watchdogTimers[strId] = setInterval(() => {
+    const c = document.querySelector(`[data-id="${id}"]`);
+    if (!c || !watchdogEnabled[strId] || c.dataset.state !== "error") {
+      clearWatchdogTimer(strId);
+      if (c) updateWatchdogBtn(c, strId);
+      return;
+    }
+    remaining--;
+    updateWatchdogBtn(c, strId, remaining);
+    if (remaining <= 0) {
+      clearWatchdogTimer(strId);
+      restartApp(id);
+    }
+  }, 1000);
+}
+
+function clearWatchdogTimer(strId) {
+  if (watchdogTimers[strId]) {
+    clearInterval(watchdogTimers[strId]);
+    delete watchdogTimers[strId];
+  }
+}
+
+function updateWatchdogBtn(card, strId, countdown = null) {
+  const btn = card.querySelector(".watchdog-btn");
+  if (!btn) return;
+  btn.classList.remove("active", "counting");
+  if (countdown !== null && watchdogTimers[strId]) {
+    const m = Math.floor(countdown / 60);
+    const s = String(countdown % 60).padStart(2, '0');
+    btn.textContent = `${m}:${s}`;
+    btn.classList.add("active", "counting");
+    btn.title = `WATCHDOG · auto-restarting in ${m}m ${countdown % 60}s`;
+  } else if (watchdogEnabled[strId]) {
+    btn.textContent = "⚡";
+    btn.classList.add("active");
+    btn.title = "WATCHDOG ON · click to disable";
+  } else {
+    btn.textContent = "⚡";
+    btn.title = "Enable Watchdog — auto-restart on error";
+  }
+}
+
+// ── Poll ──────────────────────────────────────────────────────────────────────
+async function pollStatus() {
+  if (!backendOnline) return;
+  try {
+    const statuses = await api("/apps/status");
+    statuses.forEach(s => {
+      const card = document.querySelector(`[data-id="${s.id}"]`);
+      if (!card) return;
+
+      const prevState = card.dataset.state || "offline";
+      const newState  = s.state || (s.running ? "running" : "offline");
+      card.dataset.state = newState;
+
+      // Only update if state actually changed — this preserves the current
+      // card's log-view without resetting it when another card changes.
+      if (prevState !== newState) {
+        card.classList.remove("running", "error", "success");
+        if (newState === "running") card.classList.add("running");
+        else if (newState === "error") card.classList.add("error");
+        else if (newState === "success") card.classList.add("success");
+
+        const badge = card.querySelector(".status-badge");
+        if (newState === "running") {
+          badge.innerHTML = "● RUNNING";
+        } else if (newState === "error") {
+          badge.innerHTML = "✖ ERROR";
+        } else if (newState === "success") {
+          // ── CHANGED: green circle dot + ONLINE ──
+          badge.innerHTML = `<span class="badge-dot"></span> ON`;
+        } else {
+          badge.innerHTML = "○ OFF";
+        }
+
+        let metaText = "▸ PROCESS INACTIVE";
+        if (newState === "running") metaText = "▸ PROCESS ACTIVE · CLICK NAME TO VIEW OUTPUT";
+        else if (newState === "t")   metaText = "▸ PROCESS EXITED WITH ERROR · CLICK NAME TO VIEW OUTPUT";
+        else if (newState === "success") metaText = "▸ COMPLETED · NOW ONLINE · CLICK NAME TO VIEW OUTPUT";
+        const meta = card.querySelector(".running-meta");
+        if (meta) meta.textContent = metaText;
+
+        card.querySelector(".btn-on").disabled  = s.running;
+        card.querySelector(".btn-off").disabled = !s.running;
+
+        const name = card.querySelector(".app-name").textContent;
+        if (prevState === "running" && newState === "error")   toast(`NODE "${name}" CRASHED`,    "error");
+        if (prevState === "running" && newState === "success") toast(`NODE "${name}" ONLINE`,     "success");
+
+        // Watchdog: start countdown when error detected; cancel when recovered
+        const wdId = String(s.id);
+        if (newState === "error" && watchdogEnabled[wdId] && !watchdogTimers[wdId]) {
+          startWatchdogCountdown(s.id);
+        }
+        if (prevState === "error" && newState !== "error") {
+          clearWatchdogTimer(wdId);
+          updateWatchdogBtn(card, wdId);
+        }
+      }
+    });
+
+    // Update log drawer status — does NOT affect any card states
+    if (logAppId !== null) {
+      const s = statuses.find(x => x.id === logAppId);
+      if (s) updateLogStatus(s.running);
+    }
+  } catch {}
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+async function startApp(id) {
+  const card = document.querySelector(`[data-id="${id}"]`);
+  if (card) { card.classList.remove("error", "success"); card.dataset.state = "running"; }
+  try {
+    const res = await api(`/apps/start/${id}`, "POST");
+    if (res.success) toast("NODE STARTED", "success");
+    else toast("START FAILED", "error");
+    await loadApps();
+  } catch { toast("ERROR", "error"); }
+}
+
+async function stopApp(id) {
+  try {
+    await api(`/apps/stop/${id}`, "POST");
+    toast("NODE STOPPED", "info");
+    await loadApps();
+  } catch { toast("ERROR", "error"); }
+}
+
+async function restartApp(id) {
+  try {
+    const res = await api(`/apps/restart/${id}`, "POST");
+    if (res.success) toast("NODE RESTARTED", "success");
+    await loadApps();
+  } catch { toast("RESTART FAILED", "error"); }
+}
+
+async function removeApp(id) {
+  if (!confirm("Remove this node from the system?")) return;
+  const strId = String(id);
+  clearWatchdogTimer(strId);
+  delete watchdogEnabled[strId];
+  try {
+    await api(`/apps/remove/${id}`, "DELETE");
+    if (logAppId === id) closeLog();
+    toast("NODE REMOVED", "info");
+    await loadApps();
+  } catch { toast("ERROR", "error"); }
+}
+
+async function startAllApps() {
+  for (const a of appsCache) if (!a.running) await api(`/apps/start/${a.id}`, "POST");
+  toast("ALL NODES STARTED", "success");
+  await loadApps();
+}
+
+async function stopAllApps() {
+  for (const a of appsCache) if (a.running) await api(`/apps/stop/${a.id}`, "POST");
+  toast("ALL NODES STOPPED", "info");
+  await loadApps();
+}
+
+async function addApp(path) {
+  try {
+    const res = await api("/apps/add", "POST", { path });
+    if (res.error) { toast(res.error.toUpperCase(), "error"); return; }
+    toast(`NODE INJECTED: ${res.app.name.toUpperCase()}`, "success");
+    await loadApps();
+  } catch { toast("INJECTION FAILED", "error"); }
+}
+
+async function addManual() {
+  const input = document.getElementById("manual-path");
+  const path = input.value.trim();
+  if (!path) { toast("PATH REQUIRED", "error"); return; }
+  await addApp(path);
+  input.value = "";
+}
+
+// ── Log Drawer ────────────────────────────────────────────────────────────────
+// The log drawer is fully independent — opening it for one app does NOT
+// change any card's state. Switching to another app's log is safe.
+function openLog(id) {
+  logAppId = id; logLineCount = 0;
+  const app = appsCache.find(a => a.id === id);
+  document.getElementById("log-title-name").textContent = app ? app.name.toUpperCase() : id;
+  document.getElementById("log-body").innerHTML = `<div class="log-empty">INITIALISING STREAM...</div>`;
+  document.getElementById("log-line-count").textContent = "0 LINES";
+  document.getElementById("log-overlay").classList.add("show");
+  fetchLogs();
+  if (logPollTimer) clearInterval(logPollTimer);
+  logPollTimer = setInterval(fetchLogs, 1500);
+}
+
+function closeLog() {
+  document.getElementById("log-overlay").classList.remove("show");
+  clearInterval(logPollTimer); logPollTimer = null;
+  logAppId = null; logLineCount = 0;
+}
+
+async function fetchLogs() {
+  if (logAppId === null) return;
+  try {
+    const res = await api(`/apps/logs/${logAppId}`);
+    const body = document.getElementById("log-body");
+    const lines = res.lines || [];
+    updateLogStatus(res.running);
+
+    if (lines.length === 0 && logLineCount === 0) {
+      body.innerHTML = `<div class="log-empty">NO OUTPUT YET · START THE NODE TO SEE DATA STREAM</div>`;
+      return;
+    }
+    if (lines.length > logLineCount) {
+      if (logLineCount === 0) body.innerHTML = "";
+      lines.slice(logLineCount).forEach(line => {
+        const div = document.createElement("div");
+        const isErr = line.startsWith("[ERR]") || /error|exception|traceback/i.test(line);
+        div.className = "log-line" + (isErr ? " err" : "");
+        div.textContent = line;
+        body.appendChild(div);
+      });
+      logLineCount = lines.length;
+      document.getElementById("log-line-count").textContent = `${logLineCount} LINES`;
+      if (document.getElementById("auto-scroll").checked) body.scrollTop = body.scrollHeight;
+    }
+  } catch {}
+}
+
+function updateLogStatus(running) {
+  const el = document.getElementById("log-status");
+  el.textContent = running ? "● RUNNING" : "● STOPPED";
+  el.className = "log-run-status " + (running ? "running" : "stopped");
+}
+
+function clearLogView() {
+  logLineCount = 0;
+  document.getElementById("log-body").innerHTML = `<div class="log-empty">STREAM CLEARED · AWAITING NEW DATA...</div>`;
+  document.getElementById("log-line-count").textContent = "0 LINES";
+}
+
+document.getElementById("log-overlay").addEventListener("click", e => { if (e.target === e.currentTarget) closeLog(); });
+
+// ── Rename ────────────────────────────────────────────────────────────────────
+function openRename(id, name) {
+  renameTarget = id;
+  document.getElementById("rename-input").value = name;
+  document.getElementById("rename-modal").classList.add("show");
+  setTimeout(() => document.getElementById("rename-input").focus(), 50);
+}
+function closeModal() { document.getElementById("rename-modal").classList.remove("show"); renameTarget = null; }
+async function confirmRename() {
+  const name = document.getElementById("rename-input").value.trim();
+  if (!name || !renameTarget) { closeModal(); return; }
+  try {
+    await api(`/apps/rename/${renameTarget}`, "POST", { name });
+    toast("NODE RENAMED", "success");
+    await loadApps();
+  } catch { toast("RENAME FAILED", "error"); }
+  closeModal();
+}
+document.getElementById("rename-modal").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal(); });
+document.getElementById("rename-input").addEventListener("keydown", e => { if (e.key === "Enter") confirmRename(); });
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+const dropZone = document.getElementById("drop-zone");
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", async e => {
+  e.preventDefault(); dropZone.classList.remove("drag-over");
+  for (const file of [...e.dataTransfer.files]) {
+    const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    if (![".py",".bat",".exe",".vbs",".ps1",".cmd",".sh",".js",".mjs",".ahk",".jar",".rb",".lua"].includes(ext)) { toast(`UNSUPPORTED: ${file.name}`, "error"); continue; }
+    await addApp(file.path || file.name);
+  }
+});
+document.getElementById("manual-path").addEventListener("keydown", e => { if (e.key === "Enter") addManual(); });
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+checkBackend();
+setInterval(checkBackend, 5000);
+setInterval(pollStatus, 2000);
+</script>
+</body>
+</html>
